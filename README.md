@@ -123,7 +123,7 @@ npx tsc --noEmit
 
 ## Interview Tip
 
-Every project here maps directly to your resume. When asked *"Tell me about your experience with AI pipelines"* — you point to `04-health-data-pipeline`. When asked *"Show me your TypeScript"* — you walk them through `03-discriminated-unions`. **These are not toy exercises. They are interview evidence.**
+Every project here maps directly to above skills. When asked *"Tell me about your experience with AI pipelines"* — you point to `04-health-data-pipeline`. When asked *"Show me your TypeScript"* — you walk them through `03-discriminated-unions`. **These are not toy exercises. They are interview evidence.**
 
 ---
 
