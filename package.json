@@ -1,0 +1,20 @@
+{
+  "name": "fullstack-ai-practice",
+  "version": "1.0.0",
+  "description": "**Manpreet Kaur · Senior Full-Stack Engineer · Melbourne, AU**",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.85.0",
+    "@types/node": "^25.5.2",
+    "ai": "^6.0.152",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2",
+    "zod": "^4.3.6"
+  }
+}
