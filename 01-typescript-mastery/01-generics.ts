@@ -20,6 +20,8 @@
 //
 // ── HOW IT WORKS ─────────────────────────────────────────────────────────────
 
+import { aggregateMetrics } from "../04-ai-integration/04-health-data-pipeline/health-pipeline";
+
 // 1. Basic generic function
 function identity<T>(value: T): T {
   return value;
@@ -93,7 +95,7 @@ async function fetchData<T>(url: string): Promise<FetchState<T>> {
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data: T = await response.json();
+    const data: T|null = await response.json() as T|null;
     return { data, loading: false, error: null };
   } catch (err) {
     return { data: null, loading: false, error: (err as Error).message };
@@ -121,12 +123,6 @@ interface Product {
   inStock: boolean;
 }
 
-interface HealthMetric {
-  userId: string;
-  type: "heart_rate" | "steps" | "sleep_hours" | "calories";
-  value: number;
-  recordedAt: Date;
-}
 
 // =============================================================================
 // CHALLENGES
@@ -157,15 +153,16 @@ function filterBy<T, K extends keyof T>(
   value: T[K]
 ): T[] {
   // TODO: implement this
-  throw new Error("Not implemented");
+return items.filter(item => item[key] === value);
+
 }
 
 // Test your implementation:
-// const users: User[] = [
-//   { id: "1", name: "Alice", email: "a@b.com", role: "admin", createdAt: new Date() },
-//   { id: "2", name: "Bob",   email: "b@b.com", role: "user",  createdAt: new Date() },
-// ];
-// console.log(filterBy(users, "role", "admin")); // Should return [Alice]
+const users: User[] = [
+  { id: "1", name: "Alice", email: "a@b.com", role: "admin", createdAt: new Date() },
+  { id: "2", name: "Bob",   email: "b@b.com", role: "user",  createdAt: new Date() },
+];
+console.log(filterBy(users, "role", "admin")); // Should return [Alice]
 
 
 // 🟢 CHALLENGE 2 — Generic paginated response (15 min)
@@ -182,14 +179,51 @@ function filterBy<T, K extends keyof T>(
 //   - Takes items: T[], page: number, pageSize: number, total: number
 //   - Returns a PaginatedResponse<T> with all fields correctly calculated
 
-// TODO: Define PaginatedResponse<T> interface here
+interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  meta: {
+    requestId: string;
+    cachedAt: string | null;
+  };
+}
+function createPaginatedResponse<T> (items: T[], page: number, pageSize: number, total: number): PaginatedResponse<T> {
+  const totalPages = Math.ceil(total / pageSize);
+  return {
+    items,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
+    },
+    meta: {
+      requestId: crypto.randomUUID(),
+      cachedAt: null
+    }
+  };
+} 
 
-// TODO: Implement createPaginatedResponse<T> here
-
+const products: Product[] = [
+  { id: "p1", name: "Laptop", price: 999, inStock: true },
+  { id: "p2", name: "Phone", price: 499, inStock: false },
+  { id: "p3", name: "Tablet", price: 299, inStock: true },
+];
 // Test:
-// const result = createPaginatedResponse<Product>(products, 1, 10, 47);
+const result = createPaginatedResponse<Product>(products, 1, 10, 47);
 // result.pagination.totalPages should be 5
-// result.pagination.hasNext should be true
+  console.log(result.pagination.totalPages); // Should log 5
+//  result.pagination.hasNext should be true
+console.log(result.pagination.hasNext === true); // Should be true
 
 
 // 🟡 CHALLENGE 3 — Generic repository pattern (20 min)
@@ -210,7 +244,42 @@ function filterBy<T, K extends keyof T>(
 //   const productRepo = new Repository<Product>();
 
 // TODO: Implement Repository<T> class here
+class Repository<T extends { id: string }> {
+  private items: T[] = [];
 
+  findById(id: string): T | undefined {
+    return this.items.find(item => item.id === id);
+  }
+
+  findAll(): T[] {
+    return this.items;
+  }
+
+  findWhere(predicate: (item: T) => boolean): T[] {
+    return this.items.filter(predicate);
+  }
+
+  save(item: T): void {
+    const index = this.items.findIndex(i => i.id === item.id);
+    if (index >= 0) {
+      this.items[index] = item; // Update existing
+    } else {
+      this.items.push(item); // Add new
+    }
+  }
+
+  delete(id: string): boolean {
+    const index = this.items.findIndex(item => item.id === id);
+    if (index >= 0) {
+      this.items.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+}
+
+const userRepo = new Repository<User>();
+const productRepo = new Repository<Product>();
 
 // 🟡 CHALLENGE 4 — Type-safe event system (20 min)
 // ─────────────────────────────────────────────────
@@ -218,12 +287,12 @@ function filterBy<T, K extends keyof T>(
 // payload type. This is a real pattern in large React apps.
 //
 // Define an EventMap type that maps event names to payload types:
-//   type AppEventMap = {
-//     "user:login":  { userId: string; timestamp: Date }
-//     "user:logout": { userId: string }
-//     "data:update": { resource: string; count: number }
-//     "error":       { message: string; code: number }
-//   }
+  // type AppEventMap = {
+  //   "user:login":  { userId: string; timestamp: Date }
+  //   "user:logout": { userId: string }
+  //   "data:update": { resource: string; count: number }
+  //   "error":       { message: string; code: number }
+  // }
 //
 // Then create a TypedEventBus<T extends Record<string, unknown>> class where:
 //   - on<K extends keyof T>(event: K, handler: (payload: T[K]) => void): void
@@ -234,7 +303,53 @@ function filterBy<T, K extends keyof T>(
 // TypeScript should autocomplete the payload and error on wrong fields.
 
 // TODO: Define AppEventMap here
+type errorEventMap={ "error":       { message: string; code: number }}
+ type AppEventMap = {
+    "user:login":  { userId: string; timestamp: Date }
+    "user:logout": { userId: string }
+    "error":       { message: string; code: number }
+  } & errorEventMap; // Merging with errorEventMap to include the "error" event in AppEventMap
+   type SessionEventMap = {
+    "session:start":  { userId: string; timestamp: Date }
+    "session:end": { userId: string }
+    "data:update": { resource: string; count: number }
+  } & errorEventMap
 // TODO: Implement TypedEventBus<T> class here
+//this generic class will allow to create new appevents in the type AppEventMap in future and also support any other userEventMap as well.
+class TypedEventBus<T extends Record<string, unknown>> {
+  private listeners: { [K in keyof T]?: Array<(payload: T[K]) => void> } = {};
+  on<K extends keyof T>(event: K, handler: (payload: T[K]) => void): void {
+  // Register the handler for the event (not implemented here for brevity)
+this.listeners[event] = this.listeners[event] || [];
+this.listeners[event]!.push(handler);
+
+}
+ emit<K extends keyof T>(event: K, payload: T[K]): void {
+  this.listeners[event]?.forEach(handler => handler(payload));
+  // Emit the event to all handlers (not implemented here for brevity)
+}
+
+ off<K extends keyof T>(event: K, handler: (payload: T[K]) => void): void {
+  // Remove the handler from the event's listeners (not implemented here for brevity)
+}
+//  
+} 
+
+const appBus = new TypedEventBus<AppEventMap>();
+appBus.on("user:login", (payload) => {   
+  console.log(payload.userId); // TypeScript knows this exists ✅
+  console.log(payload.timestamp); // TypeScript knows this exists ✅
+}); 
+appBus.emit("user:login", { userId: "123", timestamp: new Date() }); // ✅ Works
+appBus.emit("user:logout", { userId: "123" }); // ✅ Works
+appBus.emit("error", { message: "An error occurred", code: 500 }); // ✅ Works
+
+const usersBus = new TypedEventBus<SessionEventMap>();
+usersBus.on("session:start", (payload) => {
+  console.log(payload.userId); // TypeScript knows this exists ✅
+  console.log(payload.timestamp); // TypeScript knows this exists ✅          
+});
+usersBus.emit("error", { message: "User error", code: 400 }); // ✅ Works
 
 
 // 🔴 CHALLENGE 5 — Generic transform pipeline (30 min)
@@ -243,7 +358,7 @@ function filterBy<T, K extends keyof T>(
 // This pattern is used in data processing and is directly relevant to your
 // Yeyro health data pipeline work.
 //
-// const result = new Pipeline<HealthMetric[], ProcessedInsight[]>()
+// const result = new Pipeline<HealthMetric[]>()
 //   .pipe(validateMetrics)       // HealthMetric[] → HealthMetric[]
 //   .pipe(aggregateByType)       // HealthMetric[] → AggregatedData
 //   .pipe(generateInsights)      // AggregatedData → ProcessedInsight[]
@@ -261,9 +376,74 @@ interface ProcessedInsight {
   severity: "info" | "warning" | "alert";
   value: number;
 }
+interface HealthMetric {
+  userId: string;
+  type: "heart_rate" | "steps" | "sleep_hours" | "calories";
+  value: number;
+  recordedAt: Date;
+}
+interface AggregatedData {
+  [type: string]: {
+    type: string;
+    average: number;
+    count: number;
+  };
+}
+
+
 
 // TODO: Implement Pipeline<TInput, TOutput> class here
 // TODO: Write the 3 transform functions: validateMetrics, aggregateByType, generateInsights
 // TODO: Run the pipeline on sample HealthMetric data and log the result
+class Pipeline<TInput, TOutput = TInput> {
+  private steps: Array<(input: unknown) => unknown> = [];
 
+  pipe<TNext>(fn: (input: TOutput) => TNext): Pipeline<TInput, TNext> {
+    this.steps.push(fn as (input: unknown) => unknown);
+    return this as unknown as Pipeline<TInput, TNext>;
+  }
+
+  execute(input: TInput): TOutput {
+    return this.steps.reduce((acc, step) => step(acc), input as unknown) as TOutput;
+  }
+}
+function validateMetrics(data: HealthMetric[]): HealthMetric[] {
+  // Simplified implementation for demonstration
+  return data.filter(metric => metric.value >= 0);
+}
+function aggregateByType(data: HealthMetric[]): AggregatedData {
+  // Simplified implementation for demonstration
+  return data.reduce((acc, metric) => {
+    if (!acc[metric.type]) {
+      acc[metric.type] = { type: metric.type, average: 0, count: 0 };
+    }
+    acc[metric.type].average += metric.value;
+    acc[metric.type].count += 1;
+    return acc;
+  }, {} as AggregatedData);
+}
+function generateInsights(data: AggregatedData): ProcessedInsight[] {
+  // Simplified implementation for demonstration
+  return Object.values(data).map(agg => ({
+    type: agg.type,
+    message: `Average ${agg.type} is ${agg.average / agg.count}`,
+    severity: agg.average / agg.count > 100 ? "alert" : "info",
+    value: agg.average / agg.count
+  }));
+}
+
+// Test the pipeline with sample data 
+const rawHealthData: HealthMetric[] = [
+  { userId: "u1", type: "heart_rate", value: 80, recordedAt: new Date() },
+  { userId: "u1", type: "steps", value: 10000, recordedAt: new Date() },
+  { userId: "u2", type: "heart_rate", value: 120, recordedAt: new Date() },
+  { userId: "u2", type: "sleep_hours", value: 6, recordedAt: new Date() },
+];  
+
+const insights = new Pipeline<HealthMetric[]>()
+  .pipe(validateMetrics)
+  .pipe(aggregateByType)
+  .pipe(generateInsights)
+  .execute(rawHealthData);  
 export {};
+console.log(insights); // Should log an array of ProcessedInsight objects with correct types
