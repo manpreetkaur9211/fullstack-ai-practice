@@ -198,9 +198,15 @@ interface APIError {
 //    (readAt should be Date, not Date | null)
 
 // TODO: type CreateMetricInput = ...
+type CreateMetricInput = Omit<HealthMetric, "id" | "recordedAt" | "isAnomalous">;
 // TODO: type MetricSummary = ...
+type MetricSummary = Pick<HealthMetric, "id" | "userId" | "type" | "value" | "unit" | "recordedAt">;
 // TODO: type UpdateNotificationPayload = ...
+type UpdateNotificationPayload = Partial<Notification> & Pick<Notification, "id">;
+
 // TODO: type ReadNotification = ...
+type ReadNotification = Omit<Notification, "readAt"> & { readAt: Date };
+
 
 
 // 🟢 CHALLENGE 2 — Record-based lookup tables (15 min)
@@ -219,8 +225,20 @@ interface APIError {
 //    that uses METRIC_THRESHOLDS to check if the value is out of range
 
 // TODO: type MetricThresholds = ...
+type MetricThresholds = Record<HealthMetric["type"], { min: number; max: number; unit: string }>;
 // TODO: const METRIC_THRESHOLDS: MetricThresholds = ...
+const METRIC_THRESHOLDS: Readonly<MetricThresholds> = {
+  heart_rate: { min: 40, max: 200, unit: "bpm" },
+  steps: { min: 0, max: 80000, unit: "steps" },
+  sleep_hours: { min: 0, max: 24, unit: "hours" },
+  calories: { min: 0, max: 10000, unit: "kcal" },
+  blood_pressure: { min: 60, max: 180, unit: "mmHg" },
+};
 // TODO: function isMetricAnomalous(metric: HealthMetric): boolean
+function isMetricAnomalous(metric: HealthMetric): boolean {
+  const thresholds = METRIC_THRESHOLDS[metric.type];
+  return metric.value < thresholds.min || metric.value > thresholds.max;
+}
 
 
 // 🟡 CHALLENGE 3 — Build your own utility types (25 min)
@@ -244,6 +262,11 @@ interface APIError {
 //    Optional<User, "role" | "updatedAt"> → User but role and updatedAt are optional
 
 // TODO: type DeepReadonly<T> = ...
+type DeepReadonly<T> = {
+  
+  // readonly <[K in keyof T]>:T[K] extends object? DeepReadonly<T[K]>:readonly T[K]
+
+}
 // TODO: type Nullable<T> = ...
 // TODO: type KeysOfType<T, V> = ...
 // TODO: type Optional<T, K extends keyof T> = ...
