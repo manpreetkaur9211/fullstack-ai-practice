@@ -249,7 +249,7 @@ function isMetricAnomalous(metric: HealthMetric): boolean {
 // a) DeepReadonly<T> — like Readonly but applies recursively to nested objects
 //    const config: DeepReadonly<Config> = { db: { host: "localhost" } };
 //    config.db.host = "other"; // ❌ TypeScript error (regular Readonly wouldn't catch this)
-//
+
 // b) Nullable<T> — makes all fields T | null
 //    Useful for representing "loaded but empty" state
 //
@@ -263,14 +263,26 @@ function isMetricAnomalous(metric: HealthMetric): boolean {
 
 // TODO: type DeepReadonly<T> = ...
 type DeepReadonly<T> = {
+  // This is a recursive mapped type. For each key K in T, we check if T[K] is an object.
+  // If it is, we apply DeepReadonly to it. Otherwise, we just keep the original type.
   
-  // readonly <[K in keyof T]>:T[K] extends object? DeepReadonly<T[K]>:readonly T[K]
+  readonly [K in keyof T]:T[K] extends object? DeepReadonly<T[K]>: T[K]
 
 }
 // TODO: type Nullable<T> = ...
-// TODO: type KeysOfType<T, V> = ...
-// TODO: type Optional<T, K extends keyof T> = ...
+type Nullable<T> = {
+  [K in keyof T]: T[K] | null
+};
 
+// TODO: type KeysOfType<T, V> = ...
+type KeysOfType<T, V> = {
+  [K in keyof T]: T[K] extends V ? K : never
+}[keyof T];
+
+// TODO: type Optional<T, K extends keyof T> = ...
+type Optional<T, K extends keyof T> =Omit<T, K> & Partial<Pick<T, K>>;
+
+ 
 
 // 🟡 CHALLENGE 4 — API response type system (20 min)
 // ─────────────────────────────────────────────────────
@@ -296,8 +308,41 @@ type DeepReadonly<T> = {
 // result.success === true, TypeScript should know result is Success<T>
 
 // TODO: Define Success<T>, Failure, ApiResult<T>
+type Success<T> = {
+  success: true;
+  data: T;
+  meta: {
+    requestId: string;
+    timing: number;
+  };
+};
+
+type Failure = {
+  success: false;
+  error: APIError;
+};
+
+type ApiResult<T> = Success<T> | Failure;     
 // TODO: Define the three response types
+type GetMetricsResponse = ApiResult<HealthMetric[]>;
+type GetNotificationsResponse = ApiResult<Notification[]>;
+type CreateMetricResponse = ApiResult<HealthMetric>;    
 // TODO: Implement handleResponse
+type OnSuccess<T> = (data: T) => void;
+type OnError = (error: APIError) => void;
+
+function handleResponse<T>(
+  result: ApiResult<T>,
+  onSuccess: OnSuccess<T>,
+  onError: OnError
+): void {
+  if (result.success) {
+    onSuccess(result.data);
+  } else {
+    onError(result.error);
+  }
+}
+
 
 
 // 🔴 CHALLENGE 5 — Typed configuration builder (30 min)
@@ -322,7 +367,64 @@ type DeepReadonly<T> = {
 //      use Required<PipelineConfig> and verify TypeScript catches missing sections
 
 // TODO: Define PipelineConfig interface
+interface PipelineConfig {
+  input: {
+    source: "websocket" | "file" | "api";
+    batchSize: number;
+  };
+  processing: {
+    validateAnomalies: boolean;
+    aggregateWindow: number; // in seconds
+  };
+  output: {
+    destination: "database" | "file" | "api";
+    format: "json" | "csv" | "xml";
+  };
+  ai: {
+    model: string;
+    maxTokens: number;
+  };
+}   
 // TODO: Implement ConfigBuilder class with fluent API
+class ConfigBuilder{
+  private config: Partial<PipelineConfig> = {};
+  setInput(input: PipelineConfig["input"]): this {
+    this.config.input = input;
+    return this;
+  }
+  setProcessing(processing: PipelineConfig["processing"]): this {
+    this.config.processing = processing;
+    return this;
+  }
+  setOutput(output: PipelineConfig["output"]): this {
+    this.config.output = output;
+    return this;
+  }
+  setAI(ai: PipelineConfig["ai"]): this {
+    this.config.ai = ai;
+    return this;
+  }
+  build(): Readonly<Required<PipelineConfig>> {
+    const { input, processing, output, ai } = this.config;
+    if (!input || !processing || !output || !ai) {
+      throw new Error("All sections must be provided");
+    } 
+    return this.config as Readonly<Required<PipelineConfig>>;
+  }
+}
 // TODO: Test that TypeScript errors when required fields are missing
+type ValidatedConfig = Readonly<Required<PipelineConfig>>;
+const validConfig: ValidatedConfig = new ConfigBuilder()
+  .setInput({ source: "websocket", batchSize: 100 })
+  .setProcessing({ validateAnomalies: true, aggregateWindow: 60 })
+  .setAI({ model: "claude-3-5-sonnet-20241022", maxTokens: 1024 })
+  .setOutput({ destination: "database", format: "json" })
+  .build();
+validConfig.input.source = "file"; // ❌ TypeScript error: Cannot assign to read-only property  
+const invalidConfig: ValidatedConfig = new ConfigBuilder()
+  .setInput({ source: "websocket", batchSize: 100 })
+  .setProcessing({ validateAnomalies: true, aggregateWindow: 60 })
+  // Missing AI and Output sections — should throw at runtime and error in TypeScript
+  .build();    
 
 export {};
