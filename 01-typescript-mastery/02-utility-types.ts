@@ -387,6 +387,7 @@ interface PipelineConfig {
 }   
 // TODO: Implement ConfigBuilder class with fluent API
 class ConfigBuilder<TSet extends Partial<PipelineConfig> = {}> {
+  declare private _p: TSet;
   private config: Partial<PipelineConfig> = {};
 
   setInput(input: PipelineConfig["input"]): ConfigBuilder<TSet & Pick<PipelineConfig, "input">> {
@@ -426,9 +427,9 @@ const validConfig: ValidatedConfig = new ConfigBuilder()
   .setOutput({ destination: "database", format: "json" })
   .build();
 validConfig.input.source = "file"; // ❌ TypeScript error: Cannot assign to read-only property  
-const invalidConfig = new ConfigBuilder()
-  .setInput({ source: "websocket", batchSize: 100 })
-  .setProcessing({ validateAnomalies: true, aggregateWindow: 60 }).build();
+// const invalidConfig = new ConfigBuilder()
+//   .setInput({ source: "websocket", batchSize: 100 })
+//   .setProcessing({ validateAnomalies: true, aggregateWindow: 60 }).build();
   // Missing AI and Output sections — should throw at runtime and error in TypeScript
  
 
