@@ -386,29 +386,34 @@ interface PipelineConfig {
   };
 }   
 // TODO: Implement ConfigBuilder class with fluent API
-class ConfigBuilder{
+class ConfigBuilder<TSet extends Partial<PipelineConfig> = {}> {
   private config: Partial<PipelineConfig> = {};
-  setInput(input: PipelineConfig["input"]): this {
+
+  setInput(input: PipelineConfig["input"]): ConfigBuilder<TSet & Pick<PipelineConfig, "input">> {
     this.config.input = input;
-    return this;
+    return this as any;
   }
-  setProcessing(processing: PipelineConfig["processing"]): this {
+
+  setProcessing(processing: PipelineConfig["processing"]): ConfigBuilder<TSet & Pick<PipelineConfig, "processing">> {
     this.config.processing = processing;
-    return this;
+    return this as any;
   }
-  setOutput(output: PipelineConfig["output"]): this {
+
+  setOutput(output: PipelineConfig["output"]): ConfigBuilder<TSet & Pick<PipelineConfig, "output">> {
     this.config.output = output;
-    return this;
+    return this as any;
   }
-  setAI(ai: PipelineConfig["ai"]): this {
+
+  setAI(ai: PipelineConfig["ai"]): ConfigBuilder<TSet & Pick<PipelineConfig, "ai">> {
     this.config.ai = ai;
-    return this;
+    return this as any;
   }
-  build(): Readonly<Required<PipelineConfig>> {
-    const { input, processing, output, ai } = this.config;
-    if (!input || !processing || !output || !ai) {
-      throw new Error("All sections must be provided");
-    } 
+
+  // build() is only callable when TSet has all 4 sections
+  // The `this:` constraint is the key — TypeScript checks it at the call site
+  build(
+    this: ConfigBuilder<Required<PipelineConfig>>
+  ): Readonly<Required<PipelineConfig>> {
     return this.config as Readonly<Required<PipelineConfig>>;
   }
 }
@@ -421,10 +426,10 @@ const validConfig: ValidatedConfig = new ConfigBuilder()
   .setOutput({ destination: "database", format: "json" })
   .build();
 validConfig.input.source = "file"; // ❌ TypeScript error: Cannot assign to read-only property  
-const invalidConfig: ValidatedConfig = new ConfigBuilder()
+const invalidConfig = new ConfigBuilder()
   .setInput({ source: "websocket", batchSize: 100 })
-  .setProcessing({ validateAnomalies: true, aggregateWindow: 60 })
+  .setProcessing({ validateAnomalies: true, aggregateWindow: 60 }).build();
   // Missing AI and Output sections — should throw at runtime and error in TypeScript
-  .build();    
+ 
 
 export {};
