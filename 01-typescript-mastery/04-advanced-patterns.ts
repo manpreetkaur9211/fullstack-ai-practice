@@ -15,6 +15,7 @@
 // A mapped type transforms every property in an existing type.
 // Syntax: { [K in keyof T]: NewType }
 
+
 interface HealthMetric {
   id: string;
   userId: string;
@@ -40,8 +41,8 @@ type Observable<T> = {
 };
 
 // Filter keys — keep only keys whose values extend a certain type
-type OnlyStrings<T> = {
-  [K in keyof T as T[K] extends string ? K : never]: T[K];
+type OnlyStrings<T,V> = {
+  [K in keyof T as T[K] extends V ? K : never]: T[K];
 };
 // OnlyStrings<HealthMetric> → { id: string; userId: string }
 
@@ -99,7 +100,7 @@ type EventName<T extends string> = `on${Capitalize<T>}`;
 // `infer` lets you capture a type from inside a conditional type
 
 // Extract the resolved type from any async function
-type AsyncReturnType<T extends (...args: unknown[]) => unknown> =
+type AsyncReturnType<T > =
   T extends (...args: unknown[]) => Promise<infer R> ? R : never;
 
 async function fetchMetrics(): Promise<HealthMetric[]> {
@@ -108,8 +109,8 @@ async function fetchMetrics(): Promise<HealthMetric[]> {
 type MetricsResult = AsyncReturnType<typeof fetchMetrics>; // HealthMetric[]
 
 // Extract parameter types from a function
-type FirstParameter<T extends (first: unknown, ...rest: unknown[]) => unknown> =
-  T extends (first: infer P, ...rest: unknown[]) => unknown ? P : never;
+type FirstParameter<T > =
+  T extends (first: infer P, second : infer Q, ...rest: unknown[]) => unknown ? P&Q : never;
 
 function saveMetric(metric: HealthMetric, userId: string): void {}
 type SaveMetricFirstParam = FirstParameter<typeof saveMetric>; // HealthMetric
@@ -153,9 +154,25 @@ interface APIConfig {
 //    Stringify<User> → { id: string; name: string; age: string; isActive: string; ... }
 
 // TODO: type Mutable<T> = ...
+type Mutable<T> = {
+  -readonly [K in keyof T]: T[K];
+};
+type User2=Mutable<Readonly<User>>; // should equal User
+// true
 // TODO: type NullableValues<T> = ...
-// TODO: type EventHandlers<T> = ...
+type NullableValues<T> = {
+  [K in keyof T]: T[K] | null;
+};
+
+type EventHandlers<T> = {
+  [K in keyof T as `on${Capitalize<string & K>}Change`]: (newValue: T[K], oldValue: T[K]) => void;
+};
+
+
 // TODO: type Stringify<T> = ...
+type Stringify<T> = {
+  [K in keyof T]: T[K] extends string | number | boolean ? string : T[K];
+};
 
 
 // 🟢 CHALLENGE 2 — Template literal routes (15 min)
@@ -182,13 +199,24 @@ interface APIConfig {
 //    }
 
 // TODO: Implement all of the above
+type APIVersion = "v1" | "v2";
+type Resource = "users" | "metrics" | "notifications" | "insights";
+type VersionedRoute = `/api/${APIVersion}/${Resource}`;
+type RouteWithId = `${VersionedRoute}/${string}`;
 
+function buildRoute(version: APIVersion, resource: Resource, id?: string): VersionedRoute | RouteWithId {
+  return id ? `/api/${version}/${resource}/${id}` : `/api/${version}/${resource}`;
+}
 
 // 🟡 CHALLENGE 3 — Deep type utilities (25 min)
 // ────────────────────────────────────────────────
 // a) DeepPartial<T> — like Partial but applies recursively
 //    DeepPartial<{ a: { b: { c: string } } }> → { a?: { b?: { c?: string } } }
 //    Note: be careful with arrays and primitives — only recurse on plain objects
+
+
+
+
 //
 // b) FlattenObject<T> — flattens nested objects to dot-notation keys
 //    FlattenObject<{ user: { id: string; name: string } }> →
@@ -198,23 +226,35 @@ interface APIConfig {
 // c) Write a type-level `Diff<A, B>` that returns keys present in A but not B:
 //    Diff<User, { id: string; name: string }> → "email" | "age" | "isActive" | "createdAt"
 
-// TODO: type DeepPartial<T> = ...
-// TODO: type FlattenObject<T, Prefix extends string = ""> = ...  (hint: use recursive conditionals)
-// TODO: type Diff<A, B> = ...
+type DeepPartial<T>={
+  [K in keyof T ]?:T[K] extends object? DeepPartial<T[K]>: T[K]
+}
 
+// TODO: type FlattenObject<T, Prefix extends string = ""> = ...  (hint: use recursive conditionals)
+type FlattenObject<T, Prefix extends string = ""> = {
+  [K in keyof T &string]: T[K] extends object
+    ? FlattenObject<T[K], `${Prefix}${K}.`>
+    : `${Prefix}${K}`
+}[keyof T&string]
+type FlattenedUser = FlattenObject<{ age:number,user: { id: string; name: string } }>;
+
+
+// TODO: type Diff<A, B> = ...
+type Diff<A, B> = Exclude<keyof A, keyof B>;
+type UserDiff = Diff<User, { id: string; name: string }>; // "email" | "age" | "isActive" | "createdAt"       
 
 // 🔴 CHALLENGE 4 — Type-safe query builder (35 min)
 // ───────────────────────────────────────────────────
 // Build a type-safe query builder that mirrors real ORM/query patterns.
 // This is a real interview question for senior positions.
-//
-// interface QueryBuilder<T> {
-//   select<K extends keyof T>(...fields: K[]): QueryBuilder<Pick<T, K>>
-//   where(predicate: Partial<T>): QueryBuilder<T>
-//   orderBy<K extends keyof T>(field: K, direction?: "asc" | "desc"): QueryBuilder<T>
-//   limit(n: number): QueryBuilder<T>
-//   execute(): Promise<T[]>
-// }
+
+interface QueryBuilder<T> {
+  select<K extends keyof T>(...fields: K[]): QueryBuilder<Pick<T, K>>
+  where(predicate: Partial<T>): QueryBuilder<T>
+  orderBy<K extends keyof T>(field: K, direction?: "asc" | "desc"): QueryBuilder<T>
+  limit(n: number): QueryBuilder<T>
+  execute(): Promise<T[]>
+}
 //
 // The clever part: after calling .select("id", "name"), the returned QueryBuilder
 // should be typed as QueryBuilder<Pick<User, "id" | "name">> — not QueryBuilder<User>.

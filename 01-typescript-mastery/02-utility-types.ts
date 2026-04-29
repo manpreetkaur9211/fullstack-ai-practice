@@ -426,7 +426,7 @@ const validConfig: ValidatedConfig = new ConfigBuilder()
   .setAI({ model: "claude-3-5-sonnet-20241022", maxTokens: 1024 })
   .setOutput({ destination: "database", format: "json" })
   .build();
-validConfig.input.source = "file"; // ❌ TypeScript error: Cannot assign to read-only property  
+// validConfig.input = { source: "file", batchSize: 50 }; // ❌ TypeScript error: Cannot assign to read-only property  
 // const invalidConfig = new ConfigBuilder()
 //   .setInput({ source: "websocket", batchSize: 100 })
 //   .setProcessing({ validateAnomalies: true, aggregateWindow: 60 }).build();

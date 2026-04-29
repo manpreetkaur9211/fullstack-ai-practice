@@ -217,12 +217,21 @@ function processUnknownData(data: unknown) {
 //   c) getDeliveryTime(notification: NotificationState): Date | null
 //      Returns the delivery timestamp if delivered, null otherwise
 
-type NotificationState = /* TODO: define discriminated union here */
-  never; // replace this
+type NotificationState = {status: "pending"}|{status: "sent"; sentAt: Date}|{status: "delivered"; deliveredAt: Date}|{status: "read"; readAt: Date}|{status: "failed"; error: string; retryCount: number};// TODO: Replace with a proper discriminated union instead of
+ 
 
 // TODO: Implement getNotificationStatusText
+function getNotificationStatusText(notification: NotificationState): string {
+return notification.status;
+}
 // TODO: Implement canRetry
+function canRetry(notification: NotificationState): boolean {
+  return notification.status === "failed" && notification.retryCount < 3;
+}
 // TODO: Implement getDeliveryTime
+function getDeliveryTime(notification: NotificationState): Date | null {
+  return notification.status === "delivered" ? notification.deliveredAt : null;
+}
 
 
 // 🟢 CHALLENGE 2 — Type guard library (15 min)
@@ -238,7 +247,40 @@ type NotificationState = /* TODO: define discriminated union here */
 // before using the data.
 
 // TODO: Implement type guards
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
 
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isUser(value: unknown): value is User {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    "name" in value &&
+    "email" in value &&
+    "role" in value
+  );
+}
+
+function isHealthMetricArray(value: unknown): value is HealthMetric[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      item =>
+        typeof item === "object" &&
+        item !== null &&
+        "id" in item &&
+        "userId" in item &&
+        "type" in item &&
+        "value" in item &&
+        "recordedAt" in item
+    )
+  );
+} 
 
 // 🟡 CHALLENGE 3 — Pipeline result type (25 min)
 // ─────────────────────────────────────────────────
@@ -264,11 +306,45 @@ type NotificationState = /* TODO: define discriminated union here */
 //        skipped: number;
 //      }
 
-type StageResult<T> = /* TODO */
-  never;
+type StageResult<T> = { ok: true; data: T; processingMs: number } 
+| { ok: false; stage: string; error: string; partialData?: Partial<T> } 
+| { ok: "skipped"; reason: string };
 
+function chainStages<T, U>(
+  result: StageResult<T>,
+  nextStage: (data: T) => StageResult<U>
+): StageResult<U> {
+  if (result.ok === true) {
+    return nextStage(result.data);
+  } else if (result.ok === false) {
+    return { ok: false, stage: result.stage, error: result.error, partialData: result?.partialData as unknown as Partial<U> };
+  } else {
+    return { ok: "skipped", reason: result.reason };
+  }
+}
 // TODO: Implement chainStages
 // TODO: Implement collectResults
+function collectResults<T>(results: StageResult<T>[]): {
+  succeeded: T[];
+  failed: { stage: string; error: string }[];
+  skipped: number;
+} {
+  const succeeded: T[] = [];
+  const failed: { stage: string; error: string }[] = [];
+  let skipped = 0;
+
+  for (const result of results) {
+    if (result.ok === true) {
+      succeeded.push(result.data);
+    } else if (result.ok === false) {
+      failed.push({ stage: result.stage, error: result.error });
+    } else {
+      skipped++;
+    }
+  }
+
+  return { succeeded, failed, skipped };
+}
 
 
 // 🔴 CHALLENGE 4 — Full event-driven state machine (30 min)
@@ -298,4 +374,69 @@ type StageResult<T> = /* TODO */
 
 // TODO: Implement the full state machine
 
-export {};
+type SyncMachineState = { status: "idle"; lastSyncAt: Date | null }
+ | { status: "connecting"; deviceId: string; attempt: number }
+  | { status: "syncing"; deviceId: string; progress: number; totalRecords: number }
+  | { status: "processing"; records: HealthMetric[]; processedCount: number }
+  | { status: "complete"; syncedAt: Date; count: number; insights: string[] }
+  | { status: "error"; fromState: string; message: string; retryAt: Date }
+  | { status: "retrying"; attempt: number; maxAttempts: number };
+
+class SyncMachine {
+  private state: SyncMachineState;
+  private history: SyncMachineState[] = [];
+
+  constructor() {
+    this.state = { status: "idle", lastSyncAt: null };
+  }
+
+  transition(newState: SyncMachineState) {
+    switch (this.state.status) {
+      case "idle":
+        this.isExpectedNextState(newState,"connecting");
+        break;
+
+      case "connecting":
+        this.isExpectedNextState(newState,"syncing");
+        break;
+
+      case "syncing":
+        this.isExpectedNextState(newState,"processing");
+        break;
+
+      case "processing":
+        this.isExpectedNextState(newState,"complete");
+        break;
+
+      case "complete":
+        this.isExpectedNextState(newState,"idle");
+        break;
+      case "error":
+      this.isExpectedNextState(newState,"retrying");
+      break;
+
+      case "retrying":    
+        this.isExpectedNextState(newState,this.state.status)
+        break;
+    }
+    this.history.push(this.state);
+    this.state = newState;
+  }
+
+  private isExpectedNextState(newState: SyncMachineState, expectedState: SyncMachineState["status"]) {
+    if (newState.status !== expectedState && newState.status !== "error") {
+      throw new Error(`Invalid transition from retrying to ${newState.status}`);
+    }
+  }
+
+  getSyncProgress(): number {
+    if (this.state.status === "syncing") {
+      return (this.state.progress / this.state.totalRecords) * 100;
+    } else if (this.state.status === "processing") {
+      return (this.state.processedCount / this.state.records.length) * 100;
+    } else if (this.state.status === "complete") {
+      return 100;
+    }
+    return 0;
+  }
+}
