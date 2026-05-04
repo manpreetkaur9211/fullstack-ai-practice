@@ -217,18 +217,27 @@ function processUnknownData(data: unknown) {
 //   c) getDeliveryTime(notification: NotificationState): Date | null
 //      Returns the delivery timestamp if delivered, null otherwise
 
-type NotificationState = {status: "pending"}|{status: "sent"; sentAt: Date}|{status: "delivered"; deliveredAt: Date}|{status: "read"; readAt: Date}|{status: "failed"; error: string; retryCount: number};// TODO: Replace with a proper discriminated union instead of
- 
+type NotificationState =
+  | { status: "pending" }
+  | { status: "sent"; sentAt: Date }
+  | { status: "delivered"; deliveredAt: Date }
+  | { status: "read"; readAt: Date }
+  | { status: "failed"; error: string; retryCount: number };
 
-// TODO: Implement getNotificationStatusText
 function getNotificationStatusText(notification: NotificationState): string {
-return notification.status;
+  switch (notification.status) {
+    case "pending":   return "Waiting to be sent";
+    case "sent":      return `Sent at ${notification.sentAt.toLocaleTimeString()}`;
+    case "delivered": return `Delivered at ${notification.deliveredAt.toLocaleTimeString()}`;
+    case "read":      return `Read at ${notification.readAt.toLocaleTimeString()}`;
+    case "failed":    return `Failed: ${notification.error} (${notification.retryCount} retries)`;
+  }
 }
-// TODO: Implement canRetry
+
 function canRetry(notification: NotificationState): boolean {
   return notification.status === "failed" && notification.retryCount < 3;
 }
-// TODO: Implement getDeliveryTime
+
 function getDeliveryTime(notification: NotificationState): Date | null {
   return notification.status === "delivered" ? notification.deliveredAt : null;
 }
@@ -246,7 +255,6 @@ function getDeliveryTime(notification: NotificationState): Date | null {
 // These are genuinely useful in production — e.g., validating API responses
 // before using the data.
 
-// TODO: Implement type guards
 function isString(value: unknown): value is string {
   return typeof value === "string";
 }
@@ -317,13 +325,15 @@ function chainStages<T, U>(
   if (result.ok === true) {
     return nextStage(result.data);
   } else if (result.ok === false) {
-    return { ok: false, stage: result.stage, error: result.error, partialData: result?.partialData as unknown as Partial<U> };
+    // partialData is Partial<T>, but we need StageResult<U> here.
+    // There is no safe T → U conversion — stage 2 never ran, so it produced
+    // no partial output of type U. Drop partialData: it belongs to stage 1 only.
+    return { ok: false, stage: result.stage, error: result.error };
   } else {
     return { ok: "skipped", reason: result.reason };
   }
 }
-// TODO: Implement chainStages
-// TODO: Implement collectResults
+
 function collectResults<T>(results: StageResult<T>[]): {
   succeeded: T[];
   failed: { stage: string; error: string }[];
@@ -372,19 +382,18 @@ function collectResults<T>(results: StageResult<T>[]): {
 //
 // BONUS: Add a history array to track state transitions
 
-// TODO: Implement the full state machine
-
 type SyncMachineState = { status: "idle"; lastSyncAt: Date | null }
  | { status: "connecting"; deviceId: string; attempt: number }
   | { status: "syncing"; deviceId: string; progress: number; totalRecords: number }
   | { status: "processing"; records: HealthMetric[]; processedCount: number }
   | { status: "complete"; syncedAt: Date; count: number; insights: string[] }
-  | { status: "error"; fromState: string; message: string; retryAt: Date }
+  | { status: "error"; fromState: SyncMachineState["status"]; message: string; retryAt: Date }
   | { status: "retrying"; attempt: number; maxAttempts: number };
 
 class SyncMachine {
   private state: SyncMachineState;
   private history: SyncMachineState[] = [];
+  private retryCount: number = 0;
 
   constructor() {
     this.state = { status: "idle", lastSyncAt: null };
@@ -393,50 +402,60 @@ class SyncMachine {
   transition(newState: SyncMachineState) {
     switch (this.state.status) {
       case "idle":
-        this.isExpectedNextState(newState,"connecting");
+        this.expect(newState,"connecting");
         break;
 
       case "connecting":
-        this.isExpectedNextState(newState,"syncing");
+        this.expect(newState,"syncing");
         break;
 
       case "syncing":
-        this.isExpectedNextState(newState,"processing");
+        this.expect(newState,"processing");
         break;
 
       case "processing":
-        this.isExpectedNextState(newState,"complete");
+        this.expect(newState,"complete");
         break;
 
       case "complete":
-        this.isExpectedNextState(newState,"idle");
+        this.expect(newState,"idle");
         break;
       case "error":
-      this.isExpectedNextState(newState,"retrying");
+      this.expect(newState,"retrying");
       break;
 
-      case "retrying":    
-        this.isExpectedNextState(newState,this.state.status)
+      case "retrying": {
+        const lastState = this.history[this.history.length - 1];
+        // Narrow to the error variant before accessing .fromState
+        if (!lastState || lastState.status !== "error") {
+          throw new Error("Retrying: expected error state in history");
+        }
+        this.expect(newState, lastState.fromState);
         break;
+      }
     }
     this.history.push(this.state);
     this.state = newState;
   }
 
-  private isExpectedNextState(newState: SyncMachineState, expectedState: SyncMachineState["status"]) {
+  private expect(newState: SyncMachineState, expectedState: SyncMachineState["status"]) {
     if (newState.status !== expectedState && newState.status !== "error") {
-      throw new Error(`Invalid transition from retrying to ${newState.status}`);
+      throw new Error(`Invalid transition from ${this.state.status} to ${newState.status}`);
     }
+
   }
 
   getSyncProgress(): number {
     if (this.state.status === "syncing") {
       return (this.state.progress / this.state.totalRecords) * 100;
     } else if (this.state.status === "processing") {
-      return (this.state.processedCount / this.state.records.length) * 100;
+      return this.state.records.length > 0
+        ? (this.state.processedCount / this.state.records.length) * 100
+        : 0;
     } else if (this.state.status === "complete") {
       return 100;
     }
     return 0;
   }
 }
+export {};
