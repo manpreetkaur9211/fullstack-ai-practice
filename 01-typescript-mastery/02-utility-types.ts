@@ -197,14 +197,14 @@ interface APIError {
 // d) ReadNotification — a notification that has definitely been read
 //    (readAt should be Date, not Date | null)
 
-// TODO: type CreateMetricInput = ...
+
 type CreateMetricInput = Omit<HealthMetric, "id" | "recordedAt" | "isAnomalous">;
-// TODO: type MetricSummary = ...
+
 type MetricSummary = Pick<HealthMetric, "id" | "userId" | "type" | "value" | "unit" | "recordedAt">;
-// TODO: type UpdateNotificationPayload = ...
+
 type UpdateNotificationPayload = Partial<Notification> & Pick<Notification, "id">;
 
-// TODO: type ReadNotification = ...
+
 type ReadNotification = Omit<Notification, "readAt"> & { readAt: Date };
 
 
@@ -224,9 +224,9 @@ type ReadNotification = Omit<Notification, "readAt"> & { readAt: Date };
 // c) Write a function `isMetricAnomalous(metric: HealthMetric): boolean`
 //    that uses METRIC_THRESHOLDS to check if the value is out of range
 
-// TODO: type MetricThresholds = ...
+
 type MetricThresholds = Record<HealthMetric["type"], { min: number; max: number; unit: string }>;
-// TODO: const METRIC_THRESHOLDS: MetricThresholds = ...
+
 const METRIC_THRESHOLDS: Readonly<MetricThresholds> = {
   heart_rate: { min: 40, max: 200, unit: "bpm" },
   steps: { min: 0, max: 80000, unit: "steps" },
@@ -234,7 +234,7 @@ const METRIC_THRESHOLDS: Readonly<MetricThresholds> = {
   calories: { min: 0, max: 10000, unit: "kcal" },
   blood_pressure: { min: 60, max: 180, unit: "mmHg" },
 };
-// TODO: function isMetricAnomalous(metric: HealthMetric): boolean
+
 function isMetricAnomalous(metric: HealthMetric): boolean {
   const thresholds = METRIC_THRESHOLDS[metric.type];
   return metric.value < thresholds.min || metric.value > thresholds.max;
@@ -261,7 +261,7 @@ function isMetricAnomalous(metric: HealthMetric): boolean {
 //    leaving the rest required. (The opposite of what Pick+Partial does)
 //    Optional<User, "role" | "updatedAt"> → User but role and updatedAt are optional
 
-// TODO: type DeepReadonly<T> = ...
+
 type DeepReadonly<T> = {
   // This is a recursive mapped type. For each key K in T, we check if T[K] is an object.
   // If it is, we apply DeepReadonly to it. Otherwise, we just keep the original type.
@@ -269,17 +269,17 @@ type DeepReadonly<T> = {
   readonly [K in keyof T]:T[K] extends object? DeepReadonly<T[K]>: T[K]
 
 }
-// TODO: type Nullable<T> = ...
+
 type Nullable<T> = {
   [K in keyof T]: T[K] | null
 };
 
-// TODO: type KeysOfType<T, V> = ...
+
 type KeysOfType<T, V> = {
   [K in keyof T]: T[K] extends V ? K : never
 }[keyof T];
 
-// TODO: type Optional<T, K extends keyof T> = ...
+
 type Optional<T, K extends keyof T> =Omit<T, K> & Partial<Pick<T, K>>;
 
  
@@ -307,7 +307,7 @@ type Optional<T, K extends keyof T> =Omit<T, K> & Partial<Pick<T, K>>;
 // Inside handleResponse, TypeScript should NARROW the type — after checking
 // result.success === true, TypeScript should know result is Success<T>
 
-// TODO: Define Success<T>, Failure, ApiResult<T>
+
 type Success<T> = {
   success: true;
   data: T;
@@ -323,11 +323,11 @@ type Failure = {
 };
 
 type ApiResult<T> = Success<T> | Failure;     
-// TODO: Define the three response types
+
 type GetMetricsResponse = ApiResult<HealthMetric[]>;
 type GetNotificationsResponse = ApiResult<Notification[]>;
 type CreateMetricResponse = ApiResult<HealthMetric>;    
-// TODO: Implement handleResponse
+
 type OnSuccess<T> = (data: T) => void;
 type OnError = (error: APIError) => void;
 
@@ -366,7 +366,6 @@ function handleResponse<T>(
 //   4. Add a ValidatedConfig type that proves all sections are present —
 //      use Required<PipelineConfig> and verify TypeScript catches missing sections
 
-// TODO: Define PipelineConfig interface
 interface PipelineConfig {
   input: {
     source: "websocket" | "file" | "api";
@@ -385,7 +384,7 @@ interface PipelineConfig {
     maxTokens: number;
   };
 }   
-// TODO: Implement ConfigBuilder class with fluent API
+
 class ConfigBuilder<TSet extends Partial<PipelineConfig> = {}> {
   declare private _p: TSet;
   private config: Partial<PipelineConfig> = {};
@@ -418,7 +417,7 @@ class ConfigBuilder<TSet extends Partial<PipelineConfig> = {}> {
     return this.config as Readonly<Required<PipelineConfig>>;
   }
 }
-// TODO: Test that TypeScript errors when required fields are missing
+
 type ValidatedConfig = Readonly<Required<PipelineConfig>>;
 const validConfig: ValidatedConfig = new ConfigBuilder()
   .setInput({ source: "websocket", batchSize: 100 })

@@ -147,7 +147,6 @@ interface Product {
 // Hint: The constraint is T[K] to ensure the value type matches the key type
 
 function filterBy<T, K extends keyof T>(items: T[], key: K, value: T[K]): T[] {
-  // TODO: implement this
   return items.filter((item) => item[key] === value);
 }
 
@@ -252,7 +251,7 @@ console.log(result.pagination.hasNext === true); // Should be true
 //   const userRepo = new Repository<User>();
 //   const productRepo = new Repository<Product>();
 
-// TODO: Implement Repository<T> class here
+
 class Repository<T extends { id: string }> {
   private items: T[] = [];
 
@@ -311,7 +310,7 @@ const productRepo = new Repository<Product>();
 // When you call bus.emit("user:login", { userId: "123", timestamp: new Date() })
 // TypeScript should autocomplete the payload and error on wrong fields.
 
-// TODO: Define AppEventMap here
+
 //this generic class will allow to create new appevents in the type AppEventMap in future and also support any other userEventMap as well.
 // This way we can have a single event bus that can handle multiple types of events without having to create separate event buses for each type of event.
 type SharedEventMap = {
@@ -326,7 +325,7 @@ type SessionEventMap = {
   "session:start": { sessionId: string; timestamp: Date };
   "session:end": { sessionId: string };
 } & SharedEventMap;
-// TODO: Implement TypedEventBus<T> class here
+
 class TypedEventBus<T extends Record<string, unknown>> {
   private listeners: { [K in keyof T]?: Array<(payload: T[K]) => void> } = {};
   on<K extends keyof T>(event: K, handler: (payload: T[K]) => void): void {
@@ -402,9 +401,7 @@ interface AggregatedData {
   };
 }
 
-// TODO: Implement Pipeline<TInput, TOutput> class here
-// TODO: Write the 3 transform functions: validateMetrics, aggregateByType, generateInsights
-// TODO: Run the pipeline on sample HealthMetric data and log the result
+
 class Pipeline<TInput, TOutput = TInput> {
   private steps: Array<(input: unknown) => unknown> = [];
 

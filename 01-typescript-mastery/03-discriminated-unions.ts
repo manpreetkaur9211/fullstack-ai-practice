@@ -393,7 +393,6 @@ type SyncMachineState = { status: "idle"; lastSyncAt: Date | null }
 class SyncMachine {
   private state: SyncMachineState;
   private history: SyncMachineState[] = [];
-  private retryCount: number = 0;
 
   constructor() {
     this.state = { status: "idle", lastSyncAt: null };
