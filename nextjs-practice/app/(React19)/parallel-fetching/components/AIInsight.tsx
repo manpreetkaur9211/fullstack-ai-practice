@@ -1,16 +1,17 @@
 "use client";
 import { fetchAIInsight } from "@/lib/data";
-import { startTransition, use, useState } from "react";
+import { startTransition, use, useState, useTransition } from "react";
 import { AIInsight as AIInsightType } from "@/lib/types";
 export const AIInsight = ({ aiInsightPromise }: { aiInsightPromise: Promise<AIInsightType> }) => {
     const [newInsightPromise, setNewInsightPromise] = useState(aiInsightPromise); // This will throw a promise if it's still pending, or an error if it failed   
     const aiInsight = use(newInsightPromise); // This will throw a promise if it's still pending, or an error if it failed
+    const [isRefreshing, startRefreshTransiiton] = useTransition();
     return (
         <div className="p-4 bg-gray-100 rounded-md">    
             <h3 className="text-lg font-semibold text-gray-800 mb-2">AI Insight</h3>
-             <button 
+             <button  disabled={isRefreshing}
                 onClick={
-                    () => startTransition(() => {
+                    () => startRefreshTransiiton(() => {
                       const insight =  fetchAIInsight();  
                       setNewInsightPromise(insight);                
                     })

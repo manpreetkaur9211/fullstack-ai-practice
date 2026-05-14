@@ -14,18 +14,16 @@
 // Without parallel fetching, total time = sum of all fetches.
 // Document the timing difference in a comment.
 
-import { fetchUserProfile, fetchTodaysMetrics, fetchAIInsight } from "@/lib/data";
-import { Suspense, type ComponentType } from "react";
+import { fetchUserProfile, fetchTodaysMetrics } from "@/lib/data";
+import { Suspense } from "react";
 import { UserProfile } from "./components/UserProfile";
 import { TodaysMetrics } from "./components/TodaysMetrics";
-import { AIInsight } from "./components/AIInsight";
-import { ErrorBoundary } from "react-error-boundary";
-
+import { AIInsightWrapper } from "./components/AIInsightWrapper";
 
 export default async function UserHealthDashboard() {
     // Start all fetches in parallel
     const [userProfile, todaysMetrics] = await Promise.all([fetchUserProfile(), fetchTodaysMetrics()]);
-    const aiInsightPromise = fetchAIInsight();
+   
 
     return (
         <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-gray-900 rounded-lg shadow-lg">
@@ -38,14 +36,12 @@ export default async function UserHealthDashboard() {
                     <TodaysMetrics metrics={todaysMetrics} />
                 </Suspense> 
             </div>
-            <ErrorBoundary fallback={<div className="p-4 bg-red-100 rounded-md text-red-700">Unable to generate insight
-                
-            </div>}>
-              <Suspense fallback={<div className="p-4 bg-gray-100 rounded-md animate-pulse">Loading AI insight...</div>}>
-               
-                <AIInsight aiInsightPromise={ aiInsightPromise} />
-
-            </Suspense> </ErrorBoundary>
+            <AIInsightWrapper />
+            {/* 
+                Timing difference:
+                With parallel fetching, total time = slowest fetch.
+                Without parallel fetching, total time = sum of all fetches.
+            */}
         </div>
     );
 }
