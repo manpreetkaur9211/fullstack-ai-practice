@@ -16,3 +16,10 @@ export interface AIInsight {
   content: string;
   attempt: number; // This field is just to demonstrate that the insight can change on each fetch
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  bio: string;
+}
