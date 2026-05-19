@@ -3,7 +3,7 @@ import { User } from "@/lib/types";
 import { useState } from "react";
 import { EditForm } from "./EditForm";
 
-export const EditUser = (user: User) => {
+export const EditUser = ({ user }: { user: User }) => {
      const [isEditing, setIsEditing] = useState(false);
 
   return (

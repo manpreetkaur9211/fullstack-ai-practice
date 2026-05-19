@@ -8,7 +8,7 @@ import { EditUser } from "./EditUser";
         <div>   
 
             <UserDisplay user={user} />
-            <EditUser {...user} />
+            <EditUser user={user} />
         </div>
     );
 }

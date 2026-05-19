@@ -43,21 +43,22 @@ export async function getUser(id: string) : Promise<User> {
   return { id, name: "Jane Doe", email: "jane@example.com", bio: "TypeScript fan" };
 }
 
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+
 // 1. No cache — always fresh
 export const getLiveMetrics = async () => {
-const liveData = await fetch("/api/live-metrics", { cache: "no-store" });
-return liveData.json();
-}
-
+  const liveData = await fetch(`${BASE_URL}/api/live-metrics`, { cache: "no-store" });
+  return liveData.json();
+};
 
 // 2. Cache for 60s (ISR-style)
 export const getDailySummary = async () => {
-const recentData = await fetch("/api/daily-summary", { next: { revalidate: 60 } });
-return recentData.json();
-}
+  const recentData = await fetch(`${BASE_URL}/api/daily-summary`, { next: { revalidate: 60 } });
+  return recentData.json();
+};
 
 // 3. Cache until explicitly revalidated
 export const getUserProfile = async () => {
-const profileData = await fetch("/api/user-profile", { next: { tags: ["user-profile"] } });
-return profileData.json();
-}
+  const profileData = await fetch(`${BASE_URL}/api/user-profile`, { next: { tags: ["user-profile"] } });
+  return profileData.json();
+};

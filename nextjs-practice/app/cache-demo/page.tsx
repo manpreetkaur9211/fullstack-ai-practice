@@ -1,5 +1,6 @@
 import { getDailySummary, getLiveMetrics, getUserProfile } from "@/lib/data";
 import { revalidateProfile } from "./actions";
+import { RevalidateButton } from "./components/RevalidateButton";
 export default async function CacheDemoPage() {
   const liveData = await getLiveMetrics();
   const recentData = await getDailySummary();
@@ -17,10 +18,7 @@ export default async function CacheDemoPage() {
 
             <h2>User Profile (cache until revalidated)</h2>
             <pre>{JSON.stringify(profileData, null, 2)}</pre>
-            <button onClick={async () => {
-                await revalidateProfile();
-                alert("Profile cache revalidated!");
-            }}>Refresh Profile</button>
+           < RevalidateButton />
         </div>
     );
 }

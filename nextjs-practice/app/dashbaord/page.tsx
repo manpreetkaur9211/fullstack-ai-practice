@@ -1,4 +1,4 @@
-import { fetchAIInsight, fetchMetrics, fetchUserProfile } from "@/lib/data";
+import { fetchMetrics, fetchUserProfile } from "@/lib/data";
 import { Suspense } from "react";
 import { ProfileSection } from "./ProfileSection";
 import { MetricsSection } from "./MetricSection";
@@ -8,7 +8,8 @@ export default function DashboardPage() {
     // page.tsx — Server Component
 const profilePromise = fetchUserProfile();
 const metricsPromise = fetchMetrics();
-const insightPromise = fetchAIInsight();
+
+
 
 return (
   <>

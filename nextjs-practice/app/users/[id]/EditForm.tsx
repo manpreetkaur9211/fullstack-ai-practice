@@ -44,6 +44,8 @@ export const EditForm = ({ user }: { user: { id: string; name: string; email: st
                     {isPending ? "Saving..." : "Save"}
                 </button>
             </form>
+            {state.error && <p style={{ color: "red" }}>Error: {state.error}</p>}
+            {state.success && <p style={{ color: "green" }}>User updated successfully!</p>}
         </div>
     );
 }
