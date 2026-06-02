@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "run:generics": "ts-node 01-typescript-mastery/01-generics.ts"
+    "run:generics": "ts-node 01-typescript-mastery/01-generics.ts",
+    "ai-vercel": "node --env-file=.env -r ts-node/register 04-ai-integration/01-vercel-ai-basics/index.ts"
   },
   "keywords": [],
   "author": "",

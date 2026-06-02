@@ -35,7 +35,7 @@
 //      - useCompletion()  → single-prompt completions
 //      - useObject()      → stream structured data progressively
 
-import { generateText, streamText, generateObject } from "ai";
+import { generateText, streamText, generateObject, ModelMessage } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 
@@ -52,7 +52,7 @@ async function classifyHealthAlert(metric: string, value: number): Promise<strin
       Classify this as: "normal", "attention_needed", or "urgent".
       Respond with ONLY one of those three words.
     `,
-    maxTokens: 10,
+    maxOutputTokens: 10,
   });
   return text.trim();
 }
@@ -111,7 +111,7 @@ async function streamHealthAdvice(question: string): Promise<void> {
              evidence-based health information. Always recommend
              consulting a doctor for medical decisions.`,
     prompt: question,
-    maxTokens: 500,
+    maxOutputTokens: 500,
   });
 
   process.stdout.write("\nResponse: ");
@@ -199,13 +199,52 @@ export function HealthChatbot() {
 // Tip: Ask the model to respond in JSON format or use generateObject with Zod
 
 // TODO: Define Category type
+
+const CategorySchema = z.object({
+      category: z.enum(["symptom_report", "lifestyle_advice", "medication_query", "emergency", "general_health", "out_of_scope"]),
+      confidence: z.enum(["high", "low"]),
+    });
+type CategoryResult = z.infer<typeof CategorySchema>;
+async function categorizeUserQuestion(question: string): Promise<CategoryResult> {
+  const { text } = await generateText({
+    model: anthropic("claude-3-5-haiku-20241022"),
+    prompt: `
+      Classify this health question into one of:
+      "symptom_report", "lifestyle_advice", "medication_query",
+      "emergency", "general_health", or "out_of_scope".
+
+      Question: "${question}"
+
+      Respond in JSON format: { category: string, confidence: string }
+    `,
+    maxOutputTokens: 50,
+  });
+
+  try {
+    const result = JSON.parse(text);
+    const parsed: CategoryResult = CategorySchema.parse(result);
+    if (parsed.category === "emergency") {
+      console.warn("⚠️ Emergency question detected! Immediate attention needed.");
+    }
+    return parsed;
+  } catch (error) {
+    console.error("Failed to categorize question:", error);
+    return { category: "out_of_scope", confidence: "low" };
+  }
+}
 // TODO: Implement categorizeUserQuestion
 // TODO: Test with these questions:
-//   "I have chest pain and shortness of breath"
-//   "How many steps should I walk each day?"
-//   "What is the capital of France?"
-//   "My heart rate has been 120bpm all day, is that normal?"
-//   "Should I take ibuprofen with my blood pressure medication?"
+(async () => {
+  console.log(await categorizeUserQuestion("I have a headache and fever, what should I do?"));
+  console.log(await categorizeUserQuestion("How many steps should I walk each day?"));
+  console.log(await categorizeUserQuestion("What is the capital of France?"));
+  console.log(await categorizeUserQuestion("My heart rate has been 120bpm all day, is that normal?"));
+  console.log(await categorizeUserQuestion("Should I take ibuprofen with my blood pressure medication?"));
+  //   "How many steps should I walk each day?"
+  //   "What is the capital of France?"
+  //   "My heart rate has been 120bpm all day, is that normal?"
+  //   "Should I take ibuprofen with my blood pressure medication?"
+})();
 
 
 // 🟢 CHALLENGE 2 — Structured health summary (20 min)
@@ -223,9 +262,58 @@ export function HealthChatbot() {
 //   { heartRate: 95, steps: 3200, sleepHours: 5.5, calories: 1800 }
 //   { heartRate: 62, steps: 12000, sleepHours: 8, calories: 2400 }
 
-// TODO: Call generateHealthInsight with both sample datasets
-// TODO: Implement formatInsightForDisplay
+generateHealthInsight({ heartRate: 95, steps: 3200, sleepHours: 5.5, calories: 1800 })
+  .then(insight => {
+    console.log("Full Insight:", insight);
+    console.log("Formatted Insight:\n", formatInsightForDisplay(insight));
+  })
+  .catch(error => {
+    console.error("Error generating health insight:", error);
+    const unavailableInsight: HealthInsight = {
+      summary: "Health insight unavailable",
+      risks: [],
+      recommendations: [],
+      overallScore: 0,
+      needsAttention: false,
+    };
+    console.log("Formatted Insight:\n", formatInsightForDisplay(unavailableInsight));
+  }); 
+const formatInsightForDisplay = (insight: HealthInsight): string => {
+  const priorityEmoji = {
+    low: "🟢",
+    medium: "🟡",
+    high: "🔴",
+  };
+
+  const recommendations = insight.recommendations.map(rec => {
+    return `${priorityEmoji[rec.priority]} [${rec.category}] ${rec.action}`;
+  }).join("\n");
+
+  return `
+Summary: ${insight.summary}
+Risks: ${insight.risks.join(", ") || "None"}
+Recommendations:
+${recommendations || "No specific recommendations"}
+Overall Health Score: ${insight.overallScore}/100
+Needs Attention: ${insight.needsAttention ? "Yes" : "No"}
+  `.trim();
+};
 // TODO: Add error handling with a fallback
+ async ()=>await generateHealthInsight({ heartRate: 62, steps: 12000, sleepHours: 8, calories: 2400 })
+  .catch(error => {
+    console.error("Error generating health insight:", error);
+    return {
+      summary: "Health insight unavailable",
+      risks: [],
+      recommendations: [],
+      overallScore: 0,
+      needsAttention: false,
+    } as HealthInsight;
+  }).then(insight => { 
+console.log("Formatted Insight:\n", formatInsightForDisplay(insight)); 
+})
+;
+
 
 
 // 🟡 CHALLENGE 3 — Batch processing with rate limiting (30 min)
@@ -248,8 +336,54 @@ export function HealthChatbot() {
 //
 // Test it with 10 fake user metrics objects
 
-// TODO: Implement processBatch
-// TODO: Test with 10 fake health metrics
+const processBatch = async <T>(
+  items: T[],
+  processor: (item: T) => Promise<HealthInsight>,
+  options: { concurrency: number; delayMs: number }
+): Promise<{ item: T; result: HealthInsight | Error }[]> => {
+  const results: { item: T; result: HealthInsight | Error }[] = [];
+  for (let i = 0; i < items.length; i += options.concurrency) {
+    const batch = items.slice(i, i + options.concurrency);
+    console.log(`Processing batch ${Math.floor(i / options.concurrency) + 1}/${Math.ceil(items.length / options.concurrency)} (${batch.length} items)...`);
+    
+    const batchResults = await Promise.all(batch.map(async item => {
+      try {
+        const result = await processor(item);
+        return { item, result };
+      } catch (error) {
+        return { item, result: error instanceof Error ? error : new Error(String(error)) };
+      }
+    }));
+
+    results.push(...batchResults);
+    if (i + options.concurrency < items.length) {
+      await new Promise(resolve => setTimeout(resolve, options.delayMs));
+    }
+  }
+  return results;
+};  
+
+const fakeUserMetrics = Array.from({ length: 20 }, (_, i) => ({
+    userId: i + 1,
+    heartRate: 60 + Math.floor(Math.random() * 40),
+    steps: 2000 + Math.floor(Math.random() * 10000),
+    sleepHours: 4 + Math.random() * 4,
+    calories: 1500 + Math.floor(Math.random() * 1500),
+  }));
+  
+processBatch(
+  fakeUserMetrics,
+  generateHealthInsight,
+  { concurrency: 3, delayMs: 2000 }
+).then(results => {
+  results.forEach(({ item, result }) => {
+    if (result instanceof Error) {
+      console.error(`User ${item.userId}: Failed to process -`, result);
+    } else {
+      console.log(`User ${item.userId}:`, formatInsightForDisplay(result));
+    }
+  });
+});
 
 
 // 🔴 CHALLENGE 4 — Multi-turn health coaching session (35 min)
@@ -277,5 +411,90 @@ export function HealthChatbot() {
 // This is a real pattern for any AI-powered chat feature you'd build in React.
 
 // TODO: Implement the health coaching session REPL
+
+const readline = require("readline");
+
+async function healthCoachingSession() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const systemPrompt = `
+    You are a personal health coach. You have access to the
+    user's health metrics (provided in the first message). Be encouraging,
+    specific, and evidence-based. Keep responses under 150 words.
+  `;
+
+  const initialMetrics = {
+    heartRate: 95,
+    steps: 3200,
+    sleepHours: 5.5,
+    calories: 1800,
+  };
+
+  let conversationHistory: ModelMessage[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: `Here are my health metrics: ${JSON.stringify(initialMetrics)}` },
+  ];
+
+  let cumulativeTokens = 0;
+
+  const askQuestion = () => {
+    rl.question("You: ", async (input: string) => {
+      if (input.trim() === "/summary") {   
+      const summary = await generateObject({
+        model: anthropic("claude-3-5-sonnet-20241022"),
+        schema: z.object({
+          keyInsights: z.array(z.string()),
+          actionItems: z.array(z.string()),
+          overallSentiment: z.enum(["positive", "neutral", "negative"]),
+        }),
+        prompt: `
+          Summarize this coaching session:
+          ${conversationHistory.map(m => `${m.role}: ${m.content}`).join("\n")}
+
+          Provide key insights, action items, and overall sentiment.
+        `,
+      });
+      console.log("Session Summary:", summary.object);
+      askQuestion();
+      return;
+    }
+
+      conversationHistory.push({ role: "user", content: input });
+
+      try {
+        const { textStream, usage } = await streamText({
+          model: anthropic("claude-3-5-sonnet-20241022"),
+          system: systemPrompt,
+          messages: conversationHistory,
+        });
+
+        process.stdout.write("Coach: ");
+        for await (const chunk of textStream) {
+          process.stdout.write(chunk);
+        }
+        console.log("\n");
+
+        const usageResult = await usage;
+        cumulativeTokens += usageResult.totalTokens||0;
+        console.log(`Cumulative tokens used: ${cumulativeTokens}`);
+
+        conversationHistory.push({ role: "assistant", content: "" }); // Placeholder for assistant response
+      } catch (error) {
+        console.error("Error during coaching session:", error);
+      }
+
+      askQuestion();
+    });
+  };
+
+  askQuestion();
+}
+
+// Uncomment to start the coaching session REPL
+// healthCoachingSession();  
+
 
 export { generateHealthInsight, streamHealthAdvice, classifyHealthAlert };
