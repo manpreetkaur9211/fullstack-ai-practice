@@ -29,6 +29,27 @@ const examples = [
       "Pass a Promise as a prop and let a client component unwrap it with React 19's use() hook.",
     tag: "use()",
   },
+  {
+    href: "/cache-demo",
+    title: "Cache Demo",
+    description:
+      "Next.js fetch caching strategies — no-store, revalidate, and tag-based revalidation with Server Actions.",
+    tag: "Caching",
+  },
+  {
+    href: "/dashbaord",
+    title: "Dashboard",
+    description:
+      "Parallel data fetching with Suspense — profile, metrics, and AI insight loaded concurrently via Server Components.",
+    tag: "Dashboard",
+  },
+  {
+    href: "/users/1",
+    title: "User Detail",
+    description:
+      "Dynamic route with server-fetched data and an optimistic inline edit form using Server Actions.",
+    tag: "Dynamic Route",
+  },
 ];
 
 export default function Home() {

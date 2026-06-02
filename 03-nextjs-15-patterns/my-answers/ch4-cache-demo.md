@@ -1,0 +1,1 @@
+Document in comments: which strategy would you use for each type of data in your Yeyro project, and why?
