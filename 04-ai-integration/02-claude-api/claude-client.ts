@@ -21,18 +21,23 @@
 //   export ANTHROPIC_API_KEY=sk-ant-...
 //
 // ── HOW IT WORKS ─────────────────────────────────────────────────────────────
+const model = "global.anthropic.claude-opus-4-6-v1";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY, // Reads from env automatically
+const client = new AnthropicBedrockMantle({
+  awsRegion: "ap-southeast-2"
 });
+// const client = new Anthropic({
+//   apiKey: process.env.ANTHROPIC_API_KEY, // Reads from env automatically
+// });
 
 // ── BASIC MESSAGE ─────────────────────────────────────────────────────────────
 
 async function simpleMessage(): Promise<void> {
   const message = await client.messages.create({
-    model: "claude-3-5-sonnet-20241022",
+    model: model,
     max_tokens: 256,
     messages: [
       { role: "user", content: "Explain what a data pipeline is in 2 sentences." }
@@ -53,7 +58,7 @@ async function simpleMessage(): Promise<void> {
 
 async function withSystemPrompt(userQuery: string): Promise<string> {
   const response = await client.messages.create({
-    model: "claude-3-5-sonnet-20241022",
+    model: model,
     max_tokens: 512,
     system: `You are a senior software engineer reviewing code for production readiness.
              For every piece of code you review:
@@ -82,6 +87,7 @@ interface Message {
 class ConversationSession {
   private history: Message[] = [];
   private systemPrompt: string;
+  private tokenCount: number = 0;
 
   constructor(systemPrompt: string) {
     this.systemPrompt = systemPrompt;
@@ -99,6 +105,9 @@ class ConversationSession {
       messages: this.history, // Full conversation history
     });
 
+    // Update token count
+    this.tokenCount += response.usage.input_tokens + response.usage.output_tokens;
+
     const assistantReply = response.content[0].type === "text"
       ? response.content[0].text
       : "";
@@ -113,8 +122,13 @@ class ConversationSession {
     return [...this.history];
   }
 
+  getTokenCount(): number {
+    return this.tokenCount;
+  }
+
   clearHistory(): void {
     this.history = [];
+    this.tokenCount = 0;
   }
 }
 
@@ -273,7 +287,49 @@ async function runHealthAgent(userRequest: string): Promise<string> {
 //      c) A well-written TypeScript function (should score high)
 
 // TODO: Implement reviewCode
-
+interface CodeReview {
+  issues: { severity: "error" | "warning" | "suggestion"; description: string; line?: number }[];
+  summary: string;
+  score: number; // 0-10
+  approved: boolean;
+}
+async function reviewCode(code: string, language: string): Promise<CodeReview> {
+  const systemPrompt = `You are a senior ${language} developer performing a code review. 
+    Analyze the following code and provide feedback strictly in the following JSON format:  
+    {
+      "issues": [
+        {
+          "severity": "error" | "warning" | "suggestion",
+          "description": "Description of the issue",
+          "line": Line number (if applicable)
+        }
+      ],
+      "summary": "A brief summary of the overall code quality and any major concerns.",
+      "score": A score from 0 to 10 representing the code quality,
+      "approved": true if the code is production-ready, false otherwise
+    }
+    
+    Code to review:
+    ${code}
+  `;
+const response = await client.messages.create({
+    model: model,
+    max_tokens: 512,
+    system: systemPrompt,
+    messages: [
+      { role: "user", content: `Please review this ${language} code and provide feedback in the specified JSON format.` }
+    ],
+  });
+  // const response = await withSystemPrompt(systemPrompt);
+  
+  try {
+    const review: CodeReview = JSON.parse(response.content[0].type === "text" ? response.content[0].text : "");
+    // Add validation logic here if needed
+    return review;
+  } catch (error) {
+    throw new Error(`Failed to parse code review response: ${error instanceof Error ? error : new Error(String(error))}\nResponse was: ${response}`);
+  }
+}
 
 // 🟡 CHALLENGE 2 — Build a stateful health advisor (30 min)
 // ──────────────────────────────────────────────────────────
@@ -295,7 +351,36 @@ async function runHealthAgent(userRequest: string): Promise<string> {
 
 // TODO: Build the multi-turn conversation
 // TODO: Track cumulative token usage across turns
+const systemPrompt = `You are a helpful health advisor.
+ Remember all the information the user shares about their health goals and metrics.
+  Use this information to provide personalized advice and plans. 
+  Always reference previous information shared by the user when giving recommendations.`;
 
+const conversationSession = new ConversationSession(systemPrompt);
+async function healthCoachingSession() {
+  const userIntro = "Hi, I'm Alex. My health goals are to improve my sleep and reduce my resting heart rate.";
+  const userMetrics = "This week, my average resting heart rate was 95 bpm, and I slept an average of 5.5 hours per night.";
+  const userPlanRequest = "Based on my goals and metrics, can you suggest a personalized weekly health plan?";
+  const userFollowUp = "In the plan you suggested reducing caffeine intake. Can you explain why that's important for my sleep and heart rate?";
+
+  console.log("User:", userIntro);
+  console.log("Advisor:", await conversationSession.chat(userIntro));
+
+  console.log("User:", userMetrics);
+  console.log("Advisor:", await conversationSession.chat(userMetrics));
+
+  console.log("User:", userPlanRequest);
+  console.log("Advisor:", await conversationSession.chat(userPlanRequest));
+
+  console.log("User:", userFollowUp);
+  console.log("Advisor:", await conversationSession.chat(userFollowUp));
+
+  console.log("\nFull Conversation History:", conversationSession.getHistory());
+  // Note: To calculate total tokens, you would need to modify the ConversationSession class
+  // to track tokens from each response and sum them up.    
+  console.log("Total tokens used:", conversationSession.getTokenCount());
+  
+}
 
 // 🔴 CHALLENGE 3 — Agentic health monitor (45 min)
 // ─────────────────────────────────────────────────
