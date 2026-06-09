@@ -1,3 +1,4 @@
+const model = "global.anthropic.claude-opus-4-6-v1";
 // =============================================================================
 // VERCEL AI SDK — Concept + Challenges
 // =============================================================================
@@ -36,7 +37,8 @@
 //      - useObject()      → stream structured data progressively
 
 import { generateText, streamText, generateObject, ModelMessage } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+// import { anthropic } from "@ai-sdk/anthropic";
+import { anthropic } from "./claude";
 import { z } from "zod";
 
 // ── EXAMPLE 1: generateText — simplest usage ─────────────────────────────────
@@ -44,9 +46,12 @@ import { z } from "zod";
 // Use this when you need a full response (not streaming) for:
 //   - Background processing, batch jobs, data enrichment, classification
 
-async function classifyHealthAlert(metric: string, value: number): Promise<string> {
+async function classifyHealthAlert(
+  metric: string,
+  value: number,
+): Promise<string> {
   const { text } = await generateText({
-    model: anthropic("claude-3-5-haiku-20241022"), // Use Haiku for simple/fast tasks
+    model: anthropic(model), // Use Haiku for simple/fast tasks
     prompt: `
       A user's ${metric} reading is ${value}.
       Classify this as: "normal", "attention_needed", or "urgent".
@@ -66,11 +71,13 @@ async function classifyHealthAlert(metric: string, value: number): Promise<strin
 const HealthInsightSchema = z.object({
   summary: z.string().describe("One-sentence summary of the health data"),
   risks: z.array(z.string()).describe("List of identified health risks"),
-  recommendations: z.array(z.object({
-    action: z.string(),
-    priority: z.enum(["low", "medium", "high"]),
-    category: z.enum(["lifestyle", "medical", "nutrition", "exercise"]),
-  })),
+  recommendations: z.array(
+    z.object({
+      action: z.string(),
+      priority: z.enum(["low", "medium", "high"]),
+      category: z.enum(["lifestyle", "medical", "nutrition", "exercise"]),
+    }),
+  ),
   overallScore: z.number().min(0).max(100).describe("Overall health score"),
   needsAttention: z.boolean(),
 });
@@ -84,7 +91,7 @@ async function generateHealthInsight(metrics: {
   calories: number;
 }): Promise<HealthInsight> {
   const { object } = await generateObject({
-    model: anthropic("claude-3-5-sonnet-20241022"),
+    model: anthropic(model),
     schema: HealthInsightSchema,
     prompt: `
       Analyze these daily health metrics and provide insights:
@@ -106,7 +113,7 @@ async function generateHealthInsight(metrics: {
 
 async function streamHealthAdvice(question: string): Promise<void> {
   const { textStream } = await streamText({
-    model: anthropic("claude-3-5-sonnet-20241022"),
+    model: anthropic(model),
     system: `You are a helpful health assistant. Provide clear,
              evidence-based health information. Always recommend
              consulting a doctor for medical decisions.`,
@@ -134,7 +141,7 @@ export async function POST(request: Request) {
   const { messages } = await request.json();
 
   const result = streamText({
-    model: anthropic("claude-3-5-sonnet-20241022"),
+    model: anthropic(model),
     system: "You are a helpful health coach assistant.",
     messages, // Full conversation history from useChat hook
   });
@@ -201,13 +208,22 @@ export function HealthChatbot() {
 // TODO: Define Category type
 
 const CategorySchema = z.object({
-      category: z.enum(["symptom_report", "lifestyle_advice", "medication_query", "emergency", "general_health", "out_of_scope"]),
-      confidence: z.enum(["high", "low"]),
-    });
+  category: z.enum([
+    "symptom_report",
+    "lifestyle_advice",
+    "medication_query",
+    "emergency",
+    "general_health",
+    "out_of_scope",
+  ]),
+  confidence: z.enum(["high", "low"]),
+});
 type CategoryResult = z.infer<typeof CategorySchema>;
-async function categorizeUserQuestion(question: string): Promise<CategoryResult> {
+async function categorizeUserQuestion(
+  question: string,
+): Promise<CategoryResult> {
   const { text } = await generateText({
-    model: anthropic("claude-3-5-haiku-20241022"),
+    model: anthropic(model),
     prompt: `
       Classify this health question into one of:
       "symptom_report", "lifestyle_advice", "medication_query",
@@ -224,7 +240,9 @@ async function categorizeUserQuestion(question: string): Promise<CategoryResult>
     const result = JSON.parse(text);
     const parsed: CategoryResult = CategorySchema.parse(result);
     if (parsed.category === "emergency") {
-      console.warn("⚠️ Emergency question detected! Immediate attention needed.");
+      console.warn(
+        "⚠️ Emergency question detected! Immediate attention needed.",
+      );
     }
     return parsed;
   } catch (error) {
@@ -234,18 +252,33 @@ async function categorizeUserQuestion(question: string): Promise<CategoryResult>
 }
 // TODO: Implement categorizeUserQuestion
 // TODO: Test with these questions:
-(async () => {
-  console.log(await categorizeUserQuestion("I have a headache and fever, what should I do?"));
-  console.log(await categorizeUserQuestion("How many steps should I walk each day?"));
+const runClassification = async () => {
+  console.log(
+    await categorizeUserQuestion(
+      "I have a headache and fever, what should I do?",
+    ),
+  );
+  console.log(
+    await categorizeUserQuestion("How many steps should I walk each day?"),
+  );
   console.log(await categorizeUserQuestion("What is the capital of France?"));
-  console.log(await categorizeUserQuestion("My heart rate has been 120bpm all day, is that normal?"));
-  console.log(await categorizeUserQuestion("Should I take ibuprofen with my blood pressure medication?"));
+  console.log(
+    await categorizeUserQuestion(
+      "My heart rate has been 120bpm all day, is that normal?",
+    ),
+  );
+  console.log(
+    await categorizeUserQuestion(
+      "Should I take ibuprofen with my blood pressure medication?",
+    ),
+  );
   //   "How many steps should I walk each day?"
   //   "What is the capital of France?"
   //   "My heart rate has been 120bpm all day, is that normal?"
   //   "Should I take ibuprofen with my blood pressure medication?"
-})();
-
+}
+//uncomment to run the classification tests
+// await runClassification();
 
 // 🟢 CHALLENGE 2 — Structured health summary (20 min)
 // ─────────────────────────────────────────────────────
@@ -262,22 +295,32 @@ async function categorizeUserQuestion(question: string): Promise<CategoryResult>
 //   { heartRate: 95, steps: 3200, sleepHours: 5.5, calories: 1800 }
 //   { heartRate: 62, steps: 12000, sleepHours: 8, calories: 2400 }
 
-generateHealthInsight({ heartRate: 95, steps: 3200, sleepHours: 5.5, calories: 1800 })
-  .then(insight => {
-    console.log("Full Insight:", insight);
-    console.log("Formatted Insight:\n", formatInsightForDisplay(insight));
+const runGenerationInsight = () =>
+  generateHealthInsight({
+    heartRate: 95,
+    steps: 3200,
+    sleepHours: 5.5,
+    calories: 1800,
   })
-  .catch(error => {
-    console.error("Error generating health insight:", error);
-    const unavailableInsight: HealthInsight = {
-      summary: "Health insight unavailable",
-      risks: [],
-      recommendations: [],
-      overallScore: 0,
-      needsAttention: false,
-    };
-    console.log("Formatted Insight:\n", formatInsightForDisplay(unavailableInsight));
-  }); 
+    .then((insight) => {
+      console.log("Full Insight:", insight);
+      console.log("Formatted Insight:\n", formatInsightForDisplay(insight));
+    })
+    .catch((error) => {
+      console.error("Error generating health insight:", error);
+      const unavailableInsight: HealthInsight = {
+        summary: "Health insight unavailable",
+        risks: [],
+        recommendations: [],
+        overallScore: 0,
+        needsAttention: false,
+      };
+      console.log(
+        "Formatted Insight:\n",
+        formatInsightForDisplay(unavailableInsight),
+      );
+    });
+
 const formatInsightForDisplay = (insight: HealthInsight): string => {
   const priorityEmoji = {
     low: "🟢",
@@ -285,9 +328,11 @@ const formatInsightForDisplay = (insight: HealthInsight): string => {
     high: "🔴",
   };
 
-  const recommendations = insight.recommendations.map(rec => {
-    return `${priorityEmoji[rec.priority]} [${rec.category}] ${rec.action}`;
-  }).join("\n");
+  const recommendations = insight.recommendations
+    .map((rec) => {
+      return `${priorityEmoji[rec.priority]} [${rec.category}] ${rec.action}`;
+    })
+    .join("\n");
 
   return `
 Summary: ${insight.summary}
@@ -298,23 +343,32 @@ Overall Health Score: ${insight.overallScore}/100
 Needs Attention: ${insight.needsAttention ? "Yes" : "No"}
   `.trim();
 };
+//uncomment to run the generation with the first set of metrics
+// runGenerationInsight();
 // TODO: Add error handling with a fallback
- async ()=>await generateHealthInsight({ heartRate: 62, steps: 12000, sleepHours: 8, calories: 2400 })
-  .catch(error => {
-    console.error("Error generating health insight:", error);
-    return {
-      summary: "Health insight unavailable",
-      risks: [],
-      recommendations: [],
-      overallScore: 0,
-      needsAttention: false,
-    } as HealthInsight;
-  }).then(insight => { 
-console.log("Formatted Insight:\n", formatInsightForDisplay(insight)); 
-})
-;
+const runGeneration = () =>
+  generateHealthInsight({
+    heartRate: 62,
+    steps: 12000,
+    sleepHours: 8,
+    calories: 2400,
+  })
+    .catch((error) => {
+      console.error("Error generating health insight:", error);
+      return {
+        summary: "Health insight unavailable",
+        risks: [],
+        recommendations: [],
+        overallScore: 0,
+        needsAttention: false,
+      } as HealthInsight;
+    })
+    .then((insight) => {
+      console.log("Formatted Insight:\n", formatInsightForDisplay(insight));
+    });
 
-
+// Uncomment to run the generation with error handling
+// runGeneration();
 
 // 🟡 CHALLENGE 3 — Batch processing with rate limiting (30 min)
 // ──────────────────────────────────────────────────────────────
@@ -339,52 +393,65 @@ console.log("Formatted Insight:\n", formatInsightForDisplay(insight));
 const processBatch = async <T>(
   items: T[],
   processor: (item: T) => Promise<HealthInsight>,
-  options: { concurrency: number; delayMs: number }
+  options: { concurrency: number; delayMs: number },
 ): Promise<{ item: T; result: HealthInsight | Error }[]> => {
   const results: { item: T; result: HealthInsight | Error }[] = [];
   for (let i = 0; i < items.length; i += options.concurrency) {
     const batch = items.slice(i, i + options.concurrency);
-    console.log(`Processing batch ${Math.floor(i / options.concurrency) + 1}/${Math.ceil(items.length / options.concurrency)} (${batch.length} items)...`);
-    
-    const batchResults = await Promise.all(batch.map(async item => {
-      try {
-        const result = await processor(item);
-        return { item, result };
-      } catch (error) {
-        return { item, result: error instanceof Error ? error : new Error(String(error)) };
-      }
-    }));
+    console.log(
+      `Processing batch ${Math.floor(i / options.concurrency) + 1}/${Math.ceil(items.length / options.concurrency)} (${batch.length} items)...`,
+    );
+
+    const batchResults = await Promise.all(
+      batch.map(async (item) => {
+        try {
+          const result = await processor(item);
+          return { item, result };
+        } catch (error) {
+          return {
+            item,
+            result: error instanceof Error ? error : new Error(String(error)),
+          };
+        }
+      }),
+    );
 
     results.push(...batchResults);
     if (i + options.concurrency < items.length) {
-      await new Promise(resolve => setTimeout(resolve, options.delayMs));
+      await new Promise((resolve) => setTimeout(resolve, options.delayMs));
     }
   }
   return results;
-};  
+};
 
 const fakeUserMetrics = Array.from({ length: 20 }, (_, i) => ({
-    userId: i + 1,
-    heartRate: 60 + Math.floor(Math.random() * 40),
-    steps: 2000 + Math.floor(Math.random() * 10000),
-    sleepHours: 4 + Math.random() * 4,
-    calories: 1500 + Math.floor(Math.random() * 1500),
-  }));
-  
-processBatch(
-  fakeUserMetrics,
-  generateHealthInsight,
-  { concurrency: 3, delayMs: 2000 }
-).then(results => {
-  results.forEach(({ item, result }) => {
-    if (result instanceof Error) {
-      console.error(`User ${item.userId}: Failed to process -`, result);
-    } else {
-      console.log(`User ${item.userId}:`, formatInsightForDisplay(result));
-    }
-  });
-});
+  userId: i + 1,
+  heartRate: 60 + Math.floor(Math.random() * 40),
+  steps: 2000 + Math.floor(Math.random() * 10000),
+  sleepHours: 4 + Math.random() * 4,
+  calories: 1500 + Math.floor(Math.random() * 1500),
+}));
 
+const executeProcessing = () =>
+  processBatch(fakeUserMetrics, generateHealthInsight, {
+    concurrency: 3,
+    delayMs: 2000,
+  }).then((results) => {
+    results.forEach(({ item, result }) => {
+      if (result instanceof Error) {
+        console.error(`User ${item.userId}: Failed to process -`, result);
+      } else {
+        console.log(`User ${item.userId}:`, formatInsightForDisplay(result));
+      }
+    });
+  });
+
+// Uncomment to run batch processing
+// async function runBatchProcessing() {
+//   console.log("Starting batch processing of user health insights...");
+//   await executeProcessing();
+//   console.log("Batch processing complete.");
+// }
 
 // 🔴 CHALLENGE 4 — Multi-turn health coaching session (35 min)
 // ─────────────────────────────────────────────────────────────
@@ -435,53 +502,58 @@ async function healthCoachingSession() {
 
   let conversationHistory: ModelMessage[] = [
     { role: "system", content: systemPrompt },
-    { role: "user", content: `Here are my health metrics: ${JSON.stringify(initialMetrics)}` },
+    {
+      role: "user",
+      content: `Here are my health metrics: ${JSON.stringify(initialMetrics)}`,
+    },
   ];
 
   let cumulativeTokens = 0;
 
   const askQuestion = () => {
     rl.question("You: ", async (input: string) => {
-      if (input.trim() === "/summary") {   
-      const summary = await generateObject({
-        model: anthropic("claude-3-5-sonnet-20241022"),
-        schema: z.object({
-          keyInsights: z.array(z.string()),
-          actionItems: z.array(z.string()),
-          overallSentiment: z.enum(["positive", "neutral", "negative"]),
-        }),
-        prompt: `
+      if (input.trim() === "/summary") {
+        const summary = await generateObject({
+          model: anthropic(model),
+          schema: z.object({
+            keyInsights: z.array(z.string()),
+            actionItems: z.array(z.string()),
+            overallSentiment: z.enum(["positive", "neutral", "negative"]),
+          }),
+          prompt: `
           Summarize this coaching session:
-          ${conversationHistory.map(m => `${m.role}: ${m.content}`).join("\n")}
+          ${conversationHistory.map((m) => `${m.role}: ${m.content}`).join("\n")}
 
           Provide key insights, action items, and overall sentiment.
         `,
-      });
-      console.log("Session Summary:", summary.object);
-      askQuestion();
-      return;
-    }
+        });
+        console.log("Session Summary:", summary.object);
+        askQuestion();
+        return;
+      }
 
       conversationHistory.push({ role: "user", content: input });
 
       try {
         const { textStream, usage } = await streamText({
-          model: anthropic("claude-3-5-sonnet-20241022"),
+          model: anthropic(model),
           system: systemPrompt,
           messages: conversationHistory,
         });
 
         process.stdout.write("Coach: ");
+        let fullResponse = "";
         for await (const chunk of textStream) {
           process.stdout.write(chunk);
+          fullResponse += chunk;
         }
         console.log("\n");
 
         const usageResult = await usage;
-        cumulativeTokens += usageResult.totalTokens||0;
+        cumulativeTokens += usageResult.totalTokens || 0;
         console.log(`Cumulative tokens used: ${cumulativeTokens}`);
 
-        conversationHistory.push({ role: "assistant", content: "" }); // Placeholder for assistant response
+        conversationHistory.push({ role: "assistant", content: fullResponse });
       } catch (error) {
         console.error("Error during coaching session:", error);
       }
@@ -494,7 +566,6 @@ async function healthCoachingSession() {
 }
 
 // Uncomment to start the coaching session REPL
-// healthCoachingSession();  
-
+healthCoachingSession();
 
 export { generateHealthInsight, streamHealthAdvice, classifyHealthAlert };
