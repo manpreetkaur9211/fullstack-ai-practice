@@ -1,0 +1,1 @@
+//Structured logging (replaces scattered console.log calls)

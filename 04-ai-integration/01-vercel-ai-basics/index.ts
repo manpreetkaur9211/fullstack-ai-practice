@@ -406,8 +406,9 @@ const processBatch = async <T>(
       batch.map(async (item) => {
         try {
           const result = await processor(item);
-          return { item, result };
-        } catch (error) {
+          return { item, result }; 
+          }
+           catch (error) {
           return {
             item,
             result: error instanceof Error ? error : new Error(String(error)),

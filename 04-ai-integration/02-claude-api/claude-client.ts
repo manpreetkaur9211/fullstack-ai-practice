@@ -21,14 +21,13 @@
 //   export ANTHROPIC_API_KEY=sk-ant-...
 //
 // ── HOW IT WORKS ─────────────────────────────────────────────────────────────
-const model = "global.anthropic.claude-opus-4-6-v1";
+
 
 import Anthropic from "@anthropic-ai/sdk";
-import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 
-const client = new AnthropicBedrockMantle({
-  awsRegion: "ap-southeast-2"
-});
+import { client, model } from "../04-health-data-pipeline/lib/claude-client";
+
+
 // const client = new Anthropic({
 //   apiKey: process.env.ANTHROPIC_API_KEY, // Reads from env automatically
 // });
@@ -99,7 +98,7 @@ class ConversationSession {
 
     // Send the FULL history every time
     const response = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: model,
       max_tokens: 1024,
       system: this.systemPrompt,
       messages: this.history, // Full conversation history
@@ -381,6 +380,8 @@ async function healthCoachingSession() {
   console.log("Total tokens used:", conversationSession.getTokenCount());
   
 }
+
+healthCoachingSession();
 
 // 🔴 CHALLENGE 3 — Agentic health monitor (45 min)
 // ─────────────────────────────────────────────────

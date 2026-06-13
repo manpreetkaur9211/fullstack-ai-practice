@@ -6,7 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "run:generics": "ts-node 01-typescript-mastery/01-generics.ts",
-    "ai-vercel": "node --env-file=.env -r ts-node/register 04-ai-integration/01-vercel-ai-basics/index.ts"
+    "ai-vercel": "node --env-file=.env -r ts-node/register 04-ai-integration/01-vercel-ai-basics/index.ts",
+    "ai-claude": "node --env-file=.env -r ts-node/register 04-ai-integration/02-claude-api/claude-client.ts",
+    "health-pipeline": "node --env-file=.env -r ts-node/register 04-ai-integration/04-health-data-pipeline/demo.ts",
+    "health-pipeline-batch": "node --env-file=.env -r ts-node/register 04-ai-integration/04-health-data-pipeline/demo-batch.ts"
   },
   "keywords": [],
   "author": "",
